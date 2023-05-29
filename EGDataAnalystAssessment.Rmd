@@ -46,7 +46,7 @@ engagement<- social %>%
 print(engagement)
 ```
 
-Here we get a table for engagement rate.
+Here we get a table for engagement rate. We might be able to achieve 15% for Mixed category, but not for the others.
 
 ### 2. Does day of the week and time of posting affect engagement rates?
 ```{r}
