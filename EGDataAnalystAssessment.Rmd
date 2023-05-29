@@ -1,0 +1,178 @@
+---
+title: "Evil Genius Data Analyst"
+author: "Joshua Liao"
+date: "5/22/2023"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(scales)
+```
+
+
+```{r}
+social<-read_excel("social_data.xlsx")
+```
+### 1. What is the typical engagement rate we can expect? What’s the likelihood that we can achieve a 15% engagement rate?
+```{r}
+engagement<- social %>%
+  group_by(`Media Type`) %>%
+  summarize(engagement = mean(`Total Engagements`/`Total Impressions`, na.rm = TRUE) * 100)
+```
+
+Looking into each Media Type's Engagement, we can see that there is a strange value given for the Media Type "Photo". A cursory look through the data didn't indicate an 80% engagement rate. 
+
+```{r}
+picture_df <- subset(social, `Media Type` == "Photo")
+picture_engagement <- picture_df %>% 
+  summarize(engagement = mean(`Total Engagements`/`Total Impressions`, na.rm = TRUE) * 100)
+```
+
+I sorted the data and found that there were some entries where Total Engagements > Total Impressions; which should not be possible. We would check with the marketing team whether these entries were recorded wrong or not.
+
+For now we omit these entries.
+
+```{r}
+social <- social[!(social$`Total Impressions` < social$`Total Engagements`), ]
+engagement<- social %>%
+  group_by(`Media Type`) %>%
+  summarize(engagement = mean(`Total Engagements`/`Total Impressions`, na.rm = TRUE) * 100)
+
+print(engagement)
+```
+
+Here we get a table for engagement rate.
+
+### 2. Does day of the week and time of posting affect engagement rates?
+```{r}
+social$`Published Date` <- ymd_hms(social$`Published Date`)  
+social$DOTW <- wday(social$`Published Date` , label = TRUE)  # Extract day of the week
+social$TOTD <- format(social$`Published Date`, format = "%H:%M:%S") 
+
+social$Engagement <- social$`Total Engagements` / social$`Total Impressions`
+
+engagement_by_day_time <- social %>%
+  group_by(DOTW, TOTD) %>%
+  summarize(avg_engagement_rate = mean(Engagement))
+
+ggplot(engagement_by_day_time, aes(x = DOTW, y = avg_engagement_rate)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Day of the Week", y = "Average Engagement Rate")
+
+engagement_by_day_time$TOTD <- as.POSIXct(engagement_by_day_time$TOTD, format = "%H:%M:%S") 
+
+ggplot(engagement_by_day_time, aes(x = TOTD, y = avg_engagement_rate)) +
+  geom_point() +
+  scale_x_time(labels = date_format("%H:%M:%S"), breaks = "1 hour") +
+  labs(x = "Time of Day", y = "Engagement Rate") +
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
+
+```
+
+The graph shows that the best days in the week to post are Tuesday, Thursdays, and Fridays. The scatter plot for the time of the day however, offers no insight on the time of the day that is best.
+
+### 3. How are our game titles doing in terms of social performance? Is there a specific game we should focus more on or less?
+
+```{r}
+averages <- social %>%
+  group_by(Account) %>%
+  summarize(Average_ER = mean(`Engagement`,na.rm=TRUE),
+            Average_Impressions = mean(`Total Impressions`),
+            Average_Engagements = mean(`Total Engagements`))
+
+ggplot(averages, aes(x = Account)) +
+  geom_col(aes(y = Average_ER, fill = "Average Engagements"), width = 0.3) +
+  labs(x = "Account Name", y = "Average", fill = "Metric") +
+  theme_bw()
+
+# Create the chart
+ggplot(averages, aes(x = Account)) +
+  geom_col(aes(y = Average_Impressions, fill = "Average Impressions"), width = 0.3) +
+  geom_col(aes(y = Average_Engagements, fill = "Average Engagements"), width = 0.3) +
+  labs(x = "Account Name", y = "Average", fill = "Metric") +
+  scale_fill_manual(values = c( "Average Impressions" = "green", "Average Engagements" = "red")) +
+  theme_bw()
+```
+It seems that CSGO has the most impressions but fails to get a correlating engagement rate, with Valorant and DOTA2 posts doing better on average.
+
+### 4. What media type performs the best?
+```{r}
+mediatype <- social %>%
+  group_by(`Media Type`) %>%
+  summarize(Average_ER = mean(`Engagement`,na.rm=TRUE),
+            Average_Impressions = mean(`Total Impressions`),
+            Average_Engagements = mean(`Total Engagements`))
+
+ggplot(mediatype, aes(x = `Media Type`)) +
+  geom_col(aes(y = Average_ER, fill = "Average Engagements"), width = 0.3) +
+  labs(x = "Media Type", y = "Average", fill = "Metric") +
+  theme_bw()
+
+# Create the chart
+ggplot(mediatype, aes(x = `Media Type`)) +
+  geom_col(aes(y = Average_Impressions, fill = "Average Impressions"), width = 0.3) +
+  geom_col(aes(y = Average_Engagements, fill = "Average Engagements"), width = 0.3) +
+  labs(x = "Media Type", y = "Average", fill = "Metric") +
+  scale_fill_manual(values = c( "Average Impressions" = "green", "Average Engagements" = "red")) +
+  theme_bw()
+```
+Here we can ignore 'Album' considering the fact that there is only 1 entry of that type. It seems that 'Mixed' and 'Photo' both perform well on average with engagement rate.
+
+### 5. What is our best performing campaign?
+```{r}
+campperf <- social %>%
+  group_by(`Campaign Name`) %>%
+  summarize(Average_ER = mean(`Engagement`,na.rm=TRUE),
+            Average_Impressions = mean(`Total Impressions`),
+            Average_Engagements = mean(`Total Engagements`))
+
+ggplot(campperf, aes(x = `Campaign Name`)) +
+  geom_col(aes(y = Average_ER, fill = "Average Engagements"), width = 0.3) +
+  labs(x = "Campaign Name", y = "Average", fill = "Metric") +
+  theme_bw()
+
+# Create the chart
+ggplot(campperf, aes(x = `Campaign Name`)) +
+  geom_col(aes(y = Average_Impressions, fill = "Average Impressions"), width = 0.3) +
+  geom_col(aes(y = Average_Engagements, fill = "Average Engagements"), width = 0.3) +
+  labs(x = "Campaign Name", y = "Average", fill = "Metric") +
+  scale_fill_manual(values = c( "Average Impressions" = "green", "Average Engagements" = "red")) +
+  theme_bw()
+
+```
+The best performing campaign seems to be the Community Engagement campaign. 
+
+### 6. Define out a posting strategy for our social channels based on your discoveries.
+
+Focus on posting on Tuesday, Thursdays, and Fridays, as these are the best days for engagement based on your findings. However, it's important to regularly analyze your data and adjust the schedule if necessary.
+Content Focus:
+
+While CSGO may have the most impressions, it's crucial to prioritize content that generates higher engagement rates. Allocate more resources to Valorant and DOTA2 posts, as they have been performing better on average.
+Continue to feature CSGO content, but analyze the specific types of CSGO posts that have higher engagement rates and replicate those approaches.
+Content Types:
+
+Based on the discovery that both "Mixed" (presumably mixed media such as videos or multimedia posts) and "Photo" perform well in terms of engagement, incorporate a mix of these content types into your posting strategy. Experiment with visually appealing photos, engaging videos, and interactive multimedia content to capture audience attention.
+Campaign Strategy:
+
+Since the Community Engagement campaign has been the best performing campaign, continue to prioritize it in your strategy. Design content that encourages community participation, such as contests, polls, challenges, or discussions related to the gaming community or specific games like CSGO, Valorant, and DOTA2. Focus on fostering meaningful interactions and creating a sense of community around your brand.
+Content Optimization:
+
+Continuously analyze the performance of your posts using platform analytics tools. Identify patterns, trends, and content themes that resonate well with your audience. Optimize your content strategy based on these insights, focusing on the types of posts that drive higher engagement and adjusting content accordingly.
+
+
+
+### 7. What suggestions would you give to the social media team if they want to expand their presence (e.g. if our CSGO youtube channel is doing well should we expand to TikTok)?
+
+The social media team could consider the characteristics of each social media platform and evaluate how well they align with your content and target audience. For example, if your CSGO YouTube channel is doing well, expanding to platforms like Twitch or TikTok may be beneficial as they are popular among gamers.
+
+Each social media platform also has its own unique format and content style. Adapt your content to fit the platform you're expanding to. For example, TikTok is known for short, catchy videos, while Instagram focuses on visual content. Tailor your content strategy to make the most of each platform's strengths.
+
+We could also use existing social media presence to promote your new platforms. For example, you can use your YouTube channel to encourage viewers to follow you on TikTok or other platforms. Cross-promotion helps to build a cohesive brand presence across multiple platforms.
+
+In addition retention based content, where viewers need to wait for a next video could increase the amount of followers or subscribers. 
